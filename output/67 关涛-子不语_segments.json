@@ -1,0 +1,91 @@
+{
+  "input_file": "C:\\Users\\Frank\\Desktop\\py_test\\67 关涛-子不语.mp3",
+  "audio_duration_ms": 96504,
+  "audio_duration_seconds": 96.504,
+  "parameters": {
+    "silence_thresh_dbfs": -40.0,
+    "min_silence_len_ms": 400,
+    "seek_step_ms": 1,
+    "keep_silence_ms": 0
+  },
+  "summary": {
+    "segment_count": 8,
+    "total_voiced_ms": 7564,
+    "total_voiced_seconds": 7.564,
+    "voiced_ratio": 0.0784
+  },
+  "segments": [
+    {
+      "segment_id": 1,
+      "start_ms": 21572,
+      "end_ms": 21716,
+      "duration_ms": 144,
+      "start_seconds": 21.572,
+      "end_seconds": 21.716,
+      "duration_seconds": 0.144
+    },
+    {
+      "segment_id": 2,
+      "start_ms": 22180,
+      "end_ms": 25425,
+      "duration_ms": 3245,
+      "start_seconds": 22.18,
+      "end_seconds": 25.425,
+      "duration_seconds": 3.245
+    },
+    {
+      "segment_id": 3,
+      "start_ms": 25919,
+      "end_ms": 26710,
+      "duration_ms": 791,
+      "start_seconds": 25.919,
+      "end_seconds": 26.71,
+      "duration_seconds": 0.791
+    },
+    {
+      "segment_id": 4,
+      "start_ms": 43484,
+      "end_ms": 43636,
+      "duration_ms": 152,
+      "start_seconds": 43.484,
+      "end_seconds": 43.636,
+      "duration_seconds": 0.152
+    },
+    {
+      "segment_id": 5,
+      "start_ms": 44315,
+      "end_ms": 44701,
+      "duration_ms": 386,
+      "start_seconds": 44.315,
+      "end_seconds": 44.701,
+      "duration_seconds": 0.386
+    },
+    {
+      "segment_id": 6,
+      "start_ms": 78187,
+      "end_ms": 78699,
+      "duration_ms": 512,
+      "start_seconds": 78.187,
+      "end_seconds": 78.699,
+      "duration_seconds": 0.512
+    },
+    {
+      "segment_id": 7,
+      "start_ms": 79213,
+      "end_ms": 80725,
+      "duration_ms": 1512,
+      "start_seconds": 79.213,
+      "end_seconds": 80.725,
+      "duration_seconds": 1.512
+    },
+    {
+      "segment_id": 8,
+      "start_ms": 81288,
+      "end_ms": 82110,
+      "duration_ms": 822,
+      "start_seconds": 81.288,
+      "end_seconds": 82.11,
+      "duration_seconds": 0.822
+    }
+  ]
+}

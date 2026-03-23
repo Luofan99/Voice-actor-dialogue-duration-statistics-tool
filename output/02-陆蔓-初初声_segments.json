@@ -1,0 +1,28 @@
+{
+  "input_file": "C:\\Users\\Frank\\Desktop\\py_test\\02-陆蔓-初初声.mp3",
+  "audio_duration_ms": 16248,
+  "audio_duration_seconds": 16.248,
+  "parameters": {
+    "silence_thresh_dbfs": -40.0,
+    "min_silence_len_ms": 400,
+    "seek_step_ms": 1,
+    "keep_silence_ms": 0
+  },
+  "summary": {
+    "segment_count": 1,
+    "total_voiced_ms": 47,
+    "total_voiced_seconds": 0.047,
+    "voiced_ratio": 0.0029
+  },
+  "segments": [
+    {
+      "segment_id": 1,
+      "start_ms": 13797,
+      "end_ms": 13844,
+      "duration_ms": 47,
+      "start_seconds": 13.797,
+      "end_seconds": 13.844,
+      "duration_seconds": 0.047
+    }
+  ]
+}
