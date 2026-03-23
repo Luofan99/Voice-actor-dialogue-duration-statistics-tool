@@ -2,37 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Voice Duration Tool
-===================
 
-This command-line tool is designed for single-speaker audio files and estimates
-the total duration of "effective vocalization" by detecting non-silent regions
-with a simple loudness-threshold MVP approach.
-
-Applicable scope:
-- Single-person voice source audio
-- Threshold-based voiced-duration estimation from digital audio
-- Includes non-linguistic vocal sounds such as laughter, gasps, sighs,
-  fillers, crying, and similar expressive human vocalizations, as long as
-  they are loud enough to pass the configured threshold
-
-Important note about dBFS:
-- The silence threshold in this tool uses dBFS, which is a digital-audio
-  relative loudness scale.
-- dBFS is NOT the same thing as real-world sound pressure level in dB.
-- In other words, the default `-40 dBFS` means "40 dB below full scale in the
-  digital signal", not "40 decibels in the physical world".
-
-Default behavior:
-- The tool uses `pydub.silence.detect_nonsilent`.
-- The default silence threshold is `-40 dBFS`.
-- This is a practical MVP setting and may need adjustment for different
-  recording environments, background noise levels, and microphone gain.
-
-Examples:
-- Single file:
-    python voice_duration_tool.py input.wav --outdir ./output
-- Directory mode:
-    python voice_duration_tool.py ./audios --outdir ./output --recursive
+默认面向非技术用户：
+- 把待统计的音频/视频放进 input/
+- 运行脚本后自动扫描 input/
+- 输出写到 output/
 """
 
 from __future__ import annotations
@@ -50,25 +24,45 @@ from pydub.silence import detect_nonsilent
 from pydub.utils import which
 
 
-SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".m4a"}
+SUPPORTED_EXTENSIONS = {
+    ".wav",
+    ".mp3",
+    ".m4a",
+    ".aac",
+    ".flac",
+    ".ogg",
+    ".wma",
+    ".mp4",
+    ".mov",
+    ".mkv",
+    ".avi",
+    ".wmv",
+    ".m4v",
+}
+
+DEFAULT_INPUT_DIR = Path("input")
+DEFAULT_OUTPUT_DIR = Path("output")
+DEFAULT_SUMMARY_FILENAME = "all_files_summary.csv"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "统计单人声源音频中的有效发声总时长。"
-            "基于 dBFS 阈值检测非静音区间，并导出 CSV/JSON 明细。"
+            "统计单人音频/视频文件中的有效发声总时长。"
+            "默认直接扫描 input 文件夹，并把结果输出到 output 文件夹。"
         )
     )
     parser.add_argument(
         "input_path",
+        nargs="?",
         type=Path,
-        help="输入音频文件或目录路径。支持 wav、mp3、m4a。",
+        default=DEFAULT_INPUT_DIR,
+        help="输入的音频/视频文件或文件夹。默认: ./input",
     )
     parser.add_argument(
         "--outdir",
         type=Path,
-        default=Path("output"),
+        default=DEFAULT_OUTPUT_DIR,
         help="输出目录，默认: ./output",
     )
     parser.add_argument(
@@ -93,48 +87,53 @@ def parse_args() -> argparse.Namespace:
         "--keep-silence",
         type=int,
         default=0,
-        help="对每个片段两侧保留的静音长度，单位毫秒，默认: 0",
+        help="每个片段两侧额外保留的静音时长，单位毫秒，默认: 0",
     )
     parser.add_argument(
         "--recursive",
         action="store_true",
-        help="当输入为目录时，递归扫描目录下所有支持的音频文件。",
+        default=True,
+        help="递归扫描输入目录中的子文件夹，默认开启",
     )
     return parser.parse_args()
 
 
+def ensure_runtime_dirs(outdir: Path) -> None:
+    DEFAULT_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+
 def ensure_ffmpeg_available() -> None:
-    if which("ffmpeg") or which("ffprobe"):
+    if which("ffmpeg") and which("ffprobe"):
         return
     raise RuntimeError(
-        "未检测到 ffmpeg/ffprobe。pydub 处理 mp3、m4a 等格式通常依赖 ffmpeg。"
-        "请先安装 ffmpeg，并确保其可执行文件已加入系统 PATH。"
+        "未检测到 ffmpeg/ffprobe。处理 mp3、m4a、mp4、mov 等格式通常依赖 ffmpeg。"
+        "请先安装 ffmpeg，并确保 ffmpeg 和 ffprobe 已加入系统 PATH。"
     )
 
 
-def validate_audio_file(path: Path) -> None:
+def validate_media_file(path: Path) -> None:
     if not path.exists():
         raise FileNotFoundError(f"文件不存在: {path}")
     if not path.is_file():
         raise ValueError(f"输入路径不是文件: {path}")
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise ValueError(
-            f"不支持的音频格式: {path.suffix}。仅支持: "
+            f"不支持的文件格式: {path.suffix}。支持格式: "
             + ", ".join(sorted(SUPPORTED_EXTENSIONS))
         )
 
 
 def load_audio(file_path: Path) -> AudioSegment:
-    validate_audio_file(file_path)
+    validate_media_file(file_path)
     try:
         return AudioSegment.from_file(file_path)
     except CouldntDecodeError as exc:
         raise RuntimeError(
-            f"无法解码音频文件: {file_path}。"
-            "请确认文件格式正确，且已安装并配置 ffmpeg。"
+            f"无法解码文件: {file_path}。请确认文件未损坏，且 ffmpeg 已正确安装。"
         ) from exc
     except Exception as exc:
-        raise RuntimeError(f"读取音频失败: {file_path}，错误: {exc}") from exc
+        raise RuntimeError(f"读取文件失败: {file_path}，错误: {exc}") from exc
 
 
 def expand_segments_with_keep_silence(
@@ -201,11 +200,16 @@ def write_batch_summary(rows: Sequence[dict], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "file_name",
+        "file_type",
         "file_path",
         "audio_duration_seconds",
         "segment_count",
         "total_voiced_seconds",
         "voiced_ratio",
+        "csv_path",
+        "json_path",
+        "status",
+        "error_message",
     ]
     with output_path.open("w", newline="", encoding="utf-8-sig") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -213,16 +217,16 @@ def write_batch_summary(rows: Sequence[dict], output_path: Path) -> None:
         writer.writerows(rows)
 
 
-def collect_audio_files(input_path: Path, recursive: bool) -> List[Path]:
+def collect_media_files(input_path: Path, recursive: bool) -> List[Path]:
     if not input_path.exists():
         raise FileNotFoundError(f"输入路径不存在: {input_path}")
 
     if input_path.is_file():
-        validate_audio_file(input_path)
+        validate_media_file(input_path)
         return [input_path]
 
     if not input_path.is_dir():
-        raise ValueError(f"输入路径既不是文件也不是目录: {input_path}")
+        raise ValueError(f"输入路径既不是文件也不是文件夹: {input_path}")
 
     pattern_iter: Iterable[Path]
     if recursive:
@@ -230,21 +234,13 @@ def collect_audio_files(input_path: Path, recursive: bool) -> List[Path]:
     else:
         pattern_iter = input_path.glob("*")
 
-    files = sorted(
+    return sorted(
         p for p in pattern_iter if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
     )
 
-    if not files:
-        raise FileNotFoundError(
-            f"目录中未找到支持的音频文件: {input_path}。"
-            f"支持格式: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
-        )
-
-    return files
-
 
 def safe_stem(path: Path) -> str:
-    return path.stem or "audio"
+    return path.stem or "media"
 
 
 def build_output_paths(outdir: Path, input_file: Path) -> tuple[Path, Path]:
@@ -252,6 +248,22 @@ def build_output_paths(outdir: Path, input_file: Path) -> tuple[Path, Path]:
     csv_path = outdir / f"{base_name}_segments.csv"
     json_path = outdir / f"{base_name}_segments.json"
     return csv_path, json_path
+
+
+def format_batch_row(result: dict) -> dict:
+    return {
+        "file_name": result["file_name"],
+        "file_type": result["file_type"],
+        "file_path": result["file_path"],
+        "audio_duration_seconds": f"{result['audio_duration_seconds']:.3f}",
+        "segment_count": result["segment_count"],
+        "total_voiced_seconds": f"{result['total_voiced_seconds']:.3f}",
+        "voiced_ratio": f"{result['voiced_ratio']:.4f}",
+        "csv_path": result["csv_path"],
+        "json_path": result["json_path"],
+        "status": result["status"],
+        "error_message": result["error_message"],
+    }
 
 
 def analyze_audio(
@@ -288,6 +300,8 @@ def analyze_audio(
 
     payload = {
         "input_file": str(file_path.resolve()),
+        "file_name": file_path.name,
+        "file_type": file_path.suffix.lower().lstrip("."),
         "audio_duration_ms": audio_duration_ms,
         "audio_duration_seconds": audio_duration_seconds,
         "parameters": {
@@ -311,6 +325,7 @@ def analyze_audio(
 
     return {
         "file_name": file_path.name,
+        "file_type": file_path.suffix.lower().lstrip("."),
         "file_path": str(file_path.resolve()),
         "audio_duration_ms": audio_duration_ms,
         "audio_duration_seconds": audio_duration_seconds,
@@ -321,13 +336,35 @@ def analyze_audio(
         "csv_path": str(csv_path.resolve()),
         "json_path": str(json_path.resolve()),
         "payload": payload,
+        "status": "success",
+        "error_message": "",
+    }
+
+
+def build_failure_result(file_path: Path, error_message: str) -> dict:
+    return {
+        "file_name": file_path.name,
+        "file_type": file_path.suffix.lower().lstrip("."),
+        "file_path": str(file_path.resolve()),
+        "audio_duration_ms": 0,
+        "audio_duration_seconds": 0.0,
+        "segment_count": 0,
+        "total_voiced_ms": 0,
+        "total_voiced_seconds": 0.0,
+        "voiced_ratio": 0.0,
+        "csv_path": "",
+        "json_path": "",
+        "payload": None,
+        "status": "failed",
+        "error_message": error_message,
     }
 
 
 def print_summary(result: dict) -> None:
     print(f"文件名: {result['file_name']}")
-    print(f"音频总时长: {result['audio_duration_seconds']:.3f} 秒")
-    print(f"检测到的有效发声片段数: {result['segment_count']}")
+    print(f"文件类型: {result['file_type']}")
+    print(f"总时长: {result['audio_duration_seconds']:.3f} 秒")
+    print(f"有效发声片段数: {result['segment_count']}")
     print(f"有效发声总时长: {result['total_voiced_seconds']:.3f} 秒")
     print(f"有效发声占比: {result['voiced_ratio']:.4f}")
     print(f"CSV 明细: {result['csv_path']}")
@@ -335,7 +372,22 @@ def print_summary(result: dict) -> None:
     print("-" * 60)
 
 
+def print_failure(result: dict) -> None:
+    print(f"文件名: {result['file_name']}")
+    print("处理状态: 失败")
+    print(f"错误信息: {result['error_message']}")
+    print("-" * 60)
+
+
+def configure_stdio() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    configure_stdio()
     args = parse_args()
 
     if args.min_silence_len < 0:
@@ -349,38 +401,47 @@ def main() -> int:
         return 2
 
     try:
+        ensure_runtime_dirs(args.outdir)
         ensure_ffmpeg_available()
-        audio_files = collect_audio_files(args.input_path, args.recursive)
-        args.outdir.mkdir(parents=True, exist_ok=True)
+        media_files = collect_media_files(args.input_path, args.recursive)
+        batch_summary_path = args.outdir / DEFAULT_SUMMARY_FILENAME
+
+        if not media_files:
+            write_batch_summary([], batch_summary_path)
+            print(f"未在 {args.input_path.resolve()} 中发现可处理的音频或视频文件。")
+            print(f"已生成空白总表: {batch_summary_path.resolve()}")
+            return 0
 
         batch_rows: List[dict] = []
-        for audio_file in audio_files:
-            result = analyze_audio(
-                file_path=audio_file,
-                outdir=args.outdir,
-                silence_thresh=args.silence_thresh,
-                min_silence_len=args.min_silence_len,
-                seek_step=args.seek_step,
-                keep_silence=args.keep_silence,
-            )
-            print_summary(result)
-            batch_rows.append(
-                {
-                    "file_name": result["file_name"],
-                    "file_path": result["file_path"],
-                    "audio_duration_seconds": f"{result['audio_duration_seconds']:.3f}",
-                    "segment_count": result["segment_count"],
-                    "total_voiced_seconds": f"{result['total_voiced_seconds']:.3f}",
-                    "voiced_ratio": f"{result['voiced_ratio']:.4f}",
-                }
-            )
+        failure_count = 0
 
-        if len(batch_rows) > 1 or args.input_path.is_dir():
-            batch_summary_path = args.outdir / "batch_summary.csv"
-            write_batch_summary(batch_rows, batch_summary_path)
-            print(f"批量汇总文件: {batch_summary_path.resolve()}")
+        print(f"开始处理，共发现 {len(media_files)} 个文件。")
+        print(f"输入目录: {args.input_path.resolve()}")
+        print(f"输出目录: {args.outdir.resolve()}")
+        print("=" * 60)
 
-        return 0
+        for media_file in media_files:
+            try:
+                result = analyze_audio(
+                    file_path=media_file,
+                    outdir=args.outdir,
+                    silence_thresh=args.silence_thresh,
+                    min_silence_len=args.min_silence_len,
+                    seek_step=args.seek_step,
+                    keep_silence=args.keep_silence,
+                )
+                print_summary(result)
+            except Exception as exc:
+                result = build_failure_result(media_file, str(exc))
+                failure_count += 1
+                print_failure(result)
+
+            batch_rows.append(format_batch_row(result))
+
+        write_batch_summary(batch_rows, batch_summary_path)
+        print(f"总表已生成: {batch_summary_path.resolve()}")
+        print(f"成功: {len(batch_rows) - failure_count} 个，失败: {failure_count} 个。")
+        return 1 if failure_count > 0 else 0
 
     except FileNotFoundError as exc:
         print(f"错误: {exc}", file=sys.stderr)
